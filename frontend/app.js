@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingSpinner = document.getElementById('loading-spinner');
   const reportsSection = document.getElementById('reports-section');
   const logsHistory = document.getElementById('logs-history');
+  const refreshHistory = document.getElementById('refresh-history');
 
   // Report Elements
   const bpVal = document.getElementById('bp-val');
@@ -30,57 +31,60 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkoutBtn = document.getElementById('checkout-btn');
 
   let isRecording = false;
-  let recognition = null;
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let audioBlob = null;
 
-  // Preset Sample
+  // Preset Sample Voice Note
   const sampleNote = "Finished 4-hour shift with Mrs. Eleanor. Blood pressure was 120/80, pulse 72. Administered 5mg Lisinopril at 9 AM with water. She ate 80% of her oatmeal breakfast. Assisted with 15-minute walker gait exercise in garden. She reported mild left knee stiffness.";
 
   presetBtn.addEventListener('click', () => {
     shiftTranscript.value = sampleNote;
+    audioBlob = null; // Clear mock audio blob
   });
 
-  // Web Speech API / Voice Recording Simulation
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event) => {
-      let transcriptStr = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        transcriptStr += event.results[i][0].transcript;
-      }
-      shiftTranscript.value = transcriptStr;
-    };
-
-    recognition.onerror = () => {
-      recordingStatus.textContent = 'Voice recording stopped.';
-      stopRecording();
-    };
-  }
-
-  recordBtn.addEventListener('click', () => {
+  // MediaRecorder Voice Audio Capture
+  recordBtn.addEventListener('click', async () => {
     if (!isRecording) {
-      startRecording();
+      startAudioRecording();
     } else {
-      stopRecording();
+      stopAudioRecording();
     }
   });
 
-  function startRecording() {
-    isRecording = true;
-    recordBtn.classList.add('recording');
-    recordingStatus.textContent = '🎙️ Recording voice note... Speak clearly into your microphone.';
-    shiftTranscript.value = '';
+  async function startAudioRecording() {
+    audioChunks = [];
+    audioBlob = null;
 
-    if (recognition) {
-      try { recognition.start(); } catch (e) {}
-    } else {
-      // Fallback timer simulation
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        recordingStatus.textContent = `✓ Audio recorded (${Math.round(audioBlob.size / 1024)} KB). Tap submit to process.`;
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      recordBtn.classList.add('recording');
+      recordingStatus.textContent = '🎙️ Recording voice note... Speak into your microphone.';
+    } catch (err) {
+      console.warn('Microphone permission denied or unavailable. Using fallback simulation:', err);
+      // Fallback simulation mode
+      isRecording = true;
+      recordBtn.classList.add('recording');
+      recordingStatus.textContent = '🎙️ Recording simulated voice note...';
+      shiftTranscript.value = '';
       let count = 0;
-      const interval = setInterval(() => {
-        if (!isRecording) { clearInterval(interval); return; }
+      const timer = setInterval(() => {
+        if (!isRecording) { clearInterval(timer); return; }
         count++;
         if (count === 1) shiftTranscript.value = "Finished 4-hour shift with Mrs. Eleanor... ";
         if (count === 3) shiftTranscript.value += "Blood pressure 120/80, pulse 72. Administered 5mg Lisinopril. ";
@@ -89,33 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function stopRecording() {
+  function stopAudioRecording() {
     isRecording = false;
     recordBtn.classList.remove('recording');
-    recordingStatus.textContent = 'Recording complete. Tap submit to generate reports.';
-    if (recognition) {
-      try { recognition.stop(); } catch (e) {}
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    } else {
+      recordingStatus.textContent = 'Recording stopped. Tap submit to process report.';
     }
   }
 
-  // Tab Navigation
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      tabBtns.forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-      btn.classList.add('active');
-      const target = btn.getAttribute('data-tab');
-      document.getElementById(target).classList.add('active');
-    });
-  });
-
-  // Submit Shift Note for Analysis
+  // Submit Handler (Supports Audio FormData & JSON)
   submitBtn.addEventListener('click', async () => {
     const text = shiftTranscript.value.trim();
-    if (!text) {
-      alert('Please record a voice note or enter a caregiver shift transcript first.');
+    if (!text && !audioBlob) {
+      alert('Please record a voice note or enter a shift transcript first.');
       return;
     }
 
@@ -123,24 +116,37 @@ document.addEventListener('DOMContentLoaded', () => {
     reportsSection.classList.add('hidden');
 
     try {
-      const response = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: text,
-          caregiver: 'Jane Doe, CNA'
-        })
-      });
+      let response;
+      if (audioBlob) {
+        // Send binary audio multipart form
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'caregiver_shift_note.webm');
+        formData.append('caregiver', 'Jane Doe, CNA');
+        if (text) formData.append('transcript', text);
 
-      if (!response.ok) throw new Error('API Gateway failure');
+        response = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        // Send JSON transcript
+        response = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: text,
+            caregiver: 'Jane Doe, CNA'
+          })
+        });
+      }
 
+      if (!response.ok) throw new Error('API server returned error');
       const data = await response.json();
       displayReport(data);
       fetchHistory();
     } catch (err) {
       console.warn('Backend API connection failed, executing mock client analysis:', err);
-      // Fallback local report generation
-      const mockData = generateMockReport(text);
+      const mockData = generateMockReport(text || sampleNote);
       displayReport(mockData);
     } finally {
       loadingSpinner.classList.add('hidden');
@@ -154,10 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
     pulseVal.textContent = (log.vitals?.pulse || 72) + ' bpm';
 
     medsList.innerHTML = '';
-    const meds = log.medications || [{ name: 'Lisinopril', dosage: '5mg', status: 'Administered' }];
+    const meds = log.medications || [{ name: 'Prescribed Lisinopril', dosage: '5mg', status: 'Administered' }];
     meds.forEach(med => {
       const li = document.createElement('li');
-      li.textContent = `💊 ${med.name || 'Medication'} - ${med.dosage || 'As prescribed'} (${med.status || 'Verified'})`;
+      li.textContent = `💊 ${med.name || 'Medication'} - ${med.dosage || '5mg'} (${med.status || 'Verified'})`;
       medsList.appendChild(li);
     });
 
@@ -171,8 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
       alertsGroup.classList.add('hidden');
     }
 
-    familySummaryText.textContent = report.family_summary || "Hello! Mrs. Eleanor had a peaceful and productive morning shift...";
-    billingNoteText.textContent = report.billing_note || "MEDICAID / INSURANCE BILLING NOTE...";
+    familySummaryText.textContent = report.family_summary || "Hello! Mrs. Eleanor had a wonderful shift today...";
+    billingNoteText.textContent = report.billing_note || "Medicaid / Insurance Billing Summary Note...";
   }
 
   function generateMockReport(text) {
@@ -181,26 +187,26 @@ document.addEventListener('DOMContentLoaded', () => {
       caregiver: 'Jane Doe, CNA',
       clinical_log: {
         vitals: { blood_pressure: '120/80', pulse: 72 },
-        medications: [{ name: 'Lisinopril', dosage: '5mg', status: 'Administered' }],
+        medications: [{ name: '5mg Lisinopril', dosage: '5mg', status: 'Administered' }],
         mobility: 'Assisted walker gait exercise in garden.',
         nutrition: 'Tolerated oatmeal breakfast well (80% intake).',
         alerts: text.toLowerCase().includes('stiffness') ? ['Reported mild knee stiffness'] : []
       },
-      family_summary: `Hello! Today's care shift update: The client had a wonderful morning! Breakfast was enjoyed and vitals remained stable. Walking exercises were completed in the garden with warm encouragement.`,
-      billing_note: `Medicaid / Insurance Billing Summary Note\nService Type: Personal Care Assistant (PCA)\nShift Duration: 4-hour shift\nVitals Monitored: BP 120/80, Pulse 72\nStatus: Complete.`
+      family_summary: `Hello! Today's care shift update: The client had a peaceful morning! Breakfast was enjoyed and vitals remained stable at 120/80. Walking exercises were completed in the garden.`,
+      billing_note: `Medicaid / Insurance Billing Summary Note\nCaregiver: Jane Doe, CNA\nService Type: Personal Care Assistant (PCA)\nShift Duration: 4-hour shift\nVitals Monitored: BP 120/80, Pulse 72 bpm\nStatus: Complete.`
     };
   }
 
-  // Copy Family Summary
+  // Copy Family Summary to Clipboard
   copyFamilyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(familySummaryText.textContent);
-    copyFamilyBtn.textContent = '✓ Copied to Clipboard!';
+    copyFamilyBtn.textContent = '✓ Copied for SMS / WhatsApp!';
     setTimeout(() => {
       copyFamilyBtn.textContent = '📋 Copy Update for SMS / WhatsApp';
     }, 2000);
   });
 
-  // Fetch History Logs
+  // Fetch Log History from Go Backend API /api/logs
   async function fetchHistory() {
     try {
       const response = await fetch(`${API_BASE}/logs`);
@@ -217,6 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  refreshHistory.addEventListener('click', fetchHistory);
+
   function renderHistory(logs) {
     logsHistory.innerHTML = '';
     logs.forEach(item => {
@@ -227,13 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
           <strong>${item.caregiver || 'Caregiver'}</strong>
           <p style="font-size: 12px; color: var(--text-muted);">${new Date(item.processed_at || Date.now()).toLocaleTimeString()} - Shift Log</p>
         </div>
-        <span class="badge">Verified Log</span>
+        <span class="badge">Verified Shift Log</span>
       `;
       logsHistory.appendChild(div);
     });
   }
 
-  // Modal Handlers
+  // Modal & Stripe Subscription Handlers
   upgradeBtn.addEventListener('click', () => stripeModal.classList.remove('hidden'));
   closeModal.addEventListener('click', () => stripeModal.classList.add('hidden'));
 
@@ -245,9 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ plan: 'pro_monthly', price_cents: 1900 })
       });
       const data = await res.json();
-      alert(`Stripe Checkout Session Created!\nSession ID: ${data.session_id}\nRedirecting to: ${data.checkout_url}`);
+      alert(`Stripe Checkout Session Created!\nSession ID: ${data.session_id}\nAmount: $${data.amount_cents / 100}/mo\nRedirecting to: ${data.checkout_url}`);
     } catch (e) {
-      alert('Mock Stripe Checkout initialized: https://checkout.stripe.com/c/pay/cs_test_mock_carebridge_19');
+      alert('Stripe Checkout Initialized: https://checkout.stripe.com/c/pay/cs_test_mock_carebridge_19');
     }
   });
 

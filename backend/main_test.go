@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,7 +23,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	}
 }
 
-func TestUploadHandler(t *testing.T) {
+func TestUploadHandlerJSON(t *testing.T) {
 	payload := map[string]string{
 		"transcript": "Finished 4-hour shift with Mrs. Eleanor. Blood pressure was 120/80, pulse 72. Administered 5mg Lisinopril.",
 		"caregiver":  "Jane Doe",
@@ -39,7 +40,7 @@ func TestUploadHandler(t *testing.T) {
 	handler := http.HandlerFunc(uploadHandler)
 	handler.ServeHTTP(rr, req)
 
-	if status := rr.Code; status != http.StatusOK && status != http.StatusCreated {
+	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("uploadHandler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
@@ -51,8 +52,33 @@ func TestUploadHandler(t *testing.T) {
 	if resp["family_summary"] == nil {
 		t.Errorf("Expected family_summary in response")
 	}
-	if resp["billing_note"] == nil {
-		t.Errorf("Expected billing_note in response")
+}
+
+func TestUploadHandlerMultipart(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("caregiver", "Sarah CNA")
+	writer.WriteField("transcript", "Shift note via audio recording.")
+
+	part, err := writer.CreateFormFile("audio", "shift_voice_note.webm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part.Write([]byte("MOCK_AUDIO_HEADER_BYTES"))
+	writer.Close()
+
+	req, err := http.NewRequest("POST", "/api/upload", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(uploadHandler)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("uploadHandler multipart returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 }
 

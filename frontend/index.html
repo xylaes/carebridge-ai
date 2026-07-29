@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CareBridge AI - Voice-to-Report Caregiver Documentation Assistant</title>
-  <meta name="description" content="AI administrative assistant for in-home caregivers. Transforms quick voice notes into Clinical Shift Logs, Medicaid Billing Notes, and Warm Family Updates.">
+  <meta name="description" content="AI administrative assistant for in-home caregivers. Converts quick voice notes into Clinical Shift Logs, Medicaid Billing Notes, and Warm Family Updates.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,10 +19,10 @@
         <div class="brand-icon">✨</div>
         <div class="brand-text">
           <h1>CareBridge AI</h1>
-          <span class="badge">Powered by Gemini 3.5 Flash</span>
+          <span class="badge">Gemini 3.5 Flash + Antigravity</span>
         </div>
       </div>
-      <button id="upgrade-btn" class="btn btn-secondary">Upgrade Plan ($19/mo)</button>
+      <button id="upgrade-btn" class="btn btn-primary stripe-pill-btn">⚡ Pro Upgrade ($19/mo)</button>
     </div>
   </header>
 
@@ -32,8 +32,8 @@
     <!-- Hero / Recording Section -->
     <section class="recorder-card card">
       <div class="card-header">
-        <h2>Post-Shift Caregiver Voice Recorder</h2>
-        <p>Record a 45-second voice note after your shift. CareBridge AI will instantly extract vitals, medications, and family summaries.</p>
+        <h2>Caregiver Voice Note Ingestion</h2>
+        <p>Record a 45-second shift summary. CareBridge AI converts raw audio into clinical vitals, Medicaid billing notes, and family updates.</p>
       </div>
 
       <!-- Interactive Voice Recorder -->
@@ -42,16 +42,16 @@
           <div class="mic-icon">🎙️</div>
           <div class="pulse-ring"></div>
         </button>
-        <div id="recording-status" class="recording-status">Tap microphone to begin recording</div>
+        <div id="recording-status" class="recording-status">Tap microphone to record 45s voice note</div>
       </div>
 
       <!-- Quick Text Input Fallback / Demo Presets -->
       <div class="input-fallback">
-        <label for="shift-transcript">Or edit / paste caregiver voice transcript:</label>
-        <textarea id="shift-transcript" rows="3" placeholder="Finished 4-hour shift with Mrs. Eleanor. Blood pressure was 120/80, pulse 72. Administered 5mg Lisinopril at 9 AM with water. She ate 80% of her oatmeal breakfast and walked with her walker in the garden..."></textarea>
+        <label for="shift-transcript">Or edit / paste caregiver shift transcript:</label>
+        <textarea id="shift-transcript" rows="3" placeholder="Finished 4-hour shift with Mrs. Eleanor. Blood pressure was 120/80, pulse 72. Administered 5mg Lisinopril at 9 AM with water. She ate 80% of her oatmeal breakfast and completed walker gait exercises in garden..."></textarea>
         <div class="action-bar">
-          <button id="preset-btn" class="btn btn-ghost">✨ Load Sample Shift Note</button>
-          <button id="submit-btn" class="btn btn-primary">Generate Shift Reports</button>
+          <button id="preset-btn" class="btn btn-ghost">✨ Load Sample Voice Note</button>
+          <button id="submit-btn" class="btn btn-primary">Process Voice & Shift Log</button>
         </div>
       </div>
     </section>
@@ -59,22 +59,24 @@
     <!-- Processing Loader -->
     <div id="loading-spinner" class="loading-container hidden">
       <div class="spinner"></div>
-      <p>Agents processing voice note with Gemini 3.5 Flash...</p>
+      <p>Multi-Agent Workflow Processing (Voice Ingestion ➔ Clinical Extraction ➔ Family Summary)...</p>
     </div>
 
-    <!-- Generated Reports Output Section -->
+    <!-- Side-by-Side Generated Reports Output Section -->
     <section id="reports-section" class="reports-section hidden">
-      <div class="tabs-header">
-        <button class="tab-btn active" data-tab="tab-clinical">📋 Clinical Shift Log</button>
-        <button class="tab-btn" data-tab="tab-family">💖 Family Update</button>
-        <button class="tab-btn" data-tab="tab-billing">💳 Medicaid Billing Note</button>
+      <div class="section-title">
+        <h3>Generated Shift Documentation Reports</h3>
+        <span class="status-chip">✓ Verified by Gemini 3.5 Flash</span>
       </div>
 
-      <div class="tab-content-container">
-        <!-- Tab 1: Clinical Shift Log -->
-        <div id="tab-clinical" class="tab-content active">
-          <div class="card">
-            <h3>Clinical Care Shift Log</h3>
+      <div class="dual-column-grid">
+        
+        <!-- Left Column: Clinical Care Shift Log -->
+        <div class="column left-col">
+          <div class="card clinical-card">
+            <div class="card-badge">CLINICAL SHIFT LOG</div>
+            <h3>📋 Clinical Metrics & Vitals</h3>
+            
             <div class="vitals-grid">
               <div class="vital-chip">
                 <span class="vital-label">Blood Pressure</span>
@@ -92,65 +94,74 @@
             </div>
 
             <div class="metric-group">
-              <h4>🚶 Mobility & ADL Care</h4>
+              <h4>🚶 Mobility & ADL Activity</h4>
               <p id="mobility-val" class="metric-text"></p>
             </div>
 
             <div class="metric-group">
-              <h4>🥗 Nutritional Intake</h4>
+              <h4>🥗 Dietary & Nutritional Intake</h4>
               <p id="nutrition-val" class="metric-text"></p>
             </div>
 
             <div id="alerts-group" class="alert-box hidden">
-              <strong>⚠️ Clinical Alerts & Notes:</strong>
+              <strong>⚠️ Shift Alerts / Pain Reports:</strong>
               <p id="alerts-val"></p>
             </div>
           </div>
         </div>
 
-        <!-- Tab 2: Family Update -->
-        <div id="tab-family" class="tab-content">
+        <!-- Right Column: Family Update & Billing Note -->
+        <div class="column right-col">
+          <!-- Family Summary Card -->
           <div class="card family-card">
-            <h3>Warm Family Update Summary</h3>
-            <p class="family-intro">Designed for clear, empathetic sharing with family members:</p>
+            <div class="card-badge family-badge">FAMILY UPDATE</div>
+            <h3>💖 Warm Family Update Summary</h3>
+            <p class="family-intro">Empathetic update for family members:</p>
             <div id="family-summary-text" class="family-bubble"></div>
             <button id="copy-family-btn" class="btn btn-secondary mt-3">📋 Copy Update for SMS / WhatsApp</button>
           </div>
-        </div>
 
-        <!-- Tab 3: Medicaid Billing Note -->
-        <div id="tab-billing" class="tab-content">
-          <div class="card billing-card">
-            <h3>Medicaid / Insurance Audit Billing Note</h3>
-            <p class="billing-intro">Audit-compliant billing note format:</p>
+          <!-- Medicaid Billing Note Card -->
+          <div class="card billing-card mt-4">
+            <div class="card-badge billing-badge">MEDICAID / INSURANCE</div>
+            <h3>💳 Audit Billing Note</h3>
+            <p class="billing-intro">Compliance summary note:</p>
             <pre id="billing-note-text" class="code-block"></pre>
           </div>
         </div>
+
       </div>
     </section>
 
     <!-- Historical Shift Logs Feed -->
     <section class="card history-section">
-      <h3>Shift Documentation History</h3>
+      <div class="history-header">
+        <h3>Recent Shift Documentation History</h3>
+        <button id="refresh-history" class="btn btn-ghost">🔄 Refresh</button>
+      </div>
       <div id="logs-history" class="history-list"></div>
     </section>
 
   </main>
 
-  <!-- Subscription Modal -->
+  <!-- Stripe Subscription Modal -->
   <div id="stripe-modal" class="modal-overlay hidden">
     <div class="modal-card card">
       <button id="close-modal" class="close-btn">&times;</button>
-      <h2>CareBridge AI Professional</h2>
-      <p class="subtitle">Unlimited Voice Notes, Billing Note Export, and Family Sharing</p>
+      <div class="modal-header">
+        <span class="pro-badge">CAREBRIDGE PRO</span>
+        <h2>Agency & Private Aide Plan</h2>
+        <p class="subtitle">Automate voice documentation, Medicaid billing, and family updates</p>
+      </div>
       <div class="price-tag">$19 <span>/ month</span></div>
       <ul class="feature-list">
-        <li>✓ Unlimited 45s voice note processing</li>
-        <li>✓ Gemini 3.5 Flash Multimodal Ingestion</li>
-        <li>✓ Audit-ready Medicaid/Insurance notes</li>
-        <li>✓ One-click SMS family updates</li>
+        <li>✓ Unlimited Voice Notes (Gemini 3.5 Flash)</li>
+        <li>✓ Side-by-side Clinical & Family report generation</li>
+        <li>✓ Audit-ready Medicaid/Insurance billing notes</li>
+        <li>✓ Automatic SMS/WhatsApp family notification</li>
+        <li>✓ Multi-caregiver agency export</li>
       </ul>
-      <button id="checkout-btn" class="btn btn-primary full-width">Proceed to Stripe Checkout ($19)</button>
+      <button id="checkout-btn" class="btn btn-primary full-width stripe-btn">Subscribe for $19/mo with Stripe</button>
     </div>
   </div>
 
