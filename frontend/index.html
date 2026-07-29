@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CareBridge AI - Voice-to-Report Caregiver Documentation Assistant</title>
+  <meta name="description" content="AI administrative assistant for in-home caregivers. Transforms quick voice notes into Clinical Shift Logs, Medicaid Billing Notes, and Warm Family Updates.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">✨</div>
+        <div class="brand-text">
+          <h1>CareBridge AI</h1>
+          <span class="badge">Powered by Gemini 3.5 Flash</span>
+        </div>
+      </div>
+      <button id="upgrade-btn" class="btn btn-secondary">Upgrade Plan ($19/mo)</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Hero / Recording Section -->
+    <section class="recorder-card card">
+      <div class="card-header">
+        <h2>Post-Shift Caregiver Voice Recorder</h2>
+        <p>Record a 45-second voice note after your shift. CareBridge AI will instantly extract vitals, medications, and family summaries.</p>
+      </div>
+
+      <!-- Interactive Voice Recorder -->
+      <div class="recorder-widget">
+        <button id="record-btn" class="mic-button" aria-label="Start Voice Recording">
+          <div class="mic-icon">🎙️</div>
+          <div class="pulse-ring"></div>
+        </button>
+        <div id="recording-status" class="recording-status">Tap microphone to begin recording</div>
+      </div>
+
+      <!-- Quick Text Input Fallback / Demo Presets -->
+      <div class="input-fallback">
+        <label for="shift-transcript">Or edit / paste caregiver voice transcript:</label>
+        <textarea id="shift-transcript" rows="3" placeholder="Finished 4-hour shift with Mrs. Eleanor. Blood pressure was 120/80, pulse 72. Administered 5mg Lisinopril at 9 AM with water. She ate 80% of her oatmeal breakfast and walked with her walker in the garden..."></textarea>
+        <div class="action-bar">
+          <button id="preset-btn" class="btn btn-ghost">✨ Load Sample Shift Note</button>
+          <button id="submit-btn" class="btn btn-primary">Generate Shift Reports</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Processing Loader -->
+    <div id="loading-spinner" class="loading-container hidden">
+      <div class="spinner"></div>
+      <p>Agents processing voice note with Gemini 3.5 Flash...</p>
+    </div>
+
+    <!-- Generated Reports Output Section -->
+    <section id="reports-section" class="reports-section hidden">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="tab-clinical">📋 Clinical Shift Log</button>
+        <button class="tab-btn" data-tab="tab-family">💖 Family Update</button>
+        <button class="tab-btn" data-tab="tab-billing">💳 Medicaid Billing Note</button>
+      </div>
+
+      <div class="tab-content-container">
+        <!-- Tab 1: Clinical Shift Log -->
+        <div id="tab-clinical" class="tab-content active">
+          <div class="card">
+            <h3>Clinical Care Shift Log</h3>
+            <div class="vitals-grid">
+              <div class="vital-chip">
+                <span class="vital-label">Blood Pressure</span>
+                <span id="bp-val" class="vital-val">120/80</span>
+              </div>
+              <div class="vital-chip">
+                <span class="vital-label">Heart Pulse</span>
+                <span id="pulse-val" class="vital-val">72 bpm</span>
+              </div>
+            </div>
+
+            <div class="metric-group">
+              <h4>💊 Administered Medications</h4>
+              <ul id="meds-list" class="styled-list"></ul>
+            </div>
+
+            <div class="metric-group">
+              <h4>🚶 Mobility & ADL Care</h4>
+              <p id="mobility-val" class="metric-text"></p>
+            </div>
+
+            <div class="metric-group">
+              <h4>🥗 Nutritional Intake</h4>
+              <p id="nutrition-val" class="metric-text"></p>
+            </div>
+
+            <div id="alerts-group" class="alert-box hidden">
+              <strong>⚠️ Clinical Alerts & Notes:</strong>
+              <p id="alerts-val"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Family Update -->
+        <div id="tab-family" class="tab-content">
+          <div class="card family-card">
+            <h3>Warm Family Update Summary</h3>
+            <p class="family-intro">Designed for clear, empathetic sharing with family members:</p>
+            <div id="family-summary-text" class="family-bubble"></div>
+            <button id="copy-family-btn" class="btn btn-secondary mt-3">📋 Copy Update for SMS / WhatsApp</button>
+          </div>
+        </div>
+
+        <!-- Tab 3: Medicaid Billing Note -->
+        <div id="tab-billing" class="tab-content">
+          <div class="card billing-card">
+            <h3>Medicaid / Insurance Audit Billing Note</h3>
+            <p class="billing-intro">Audit-compliant billing note format:</p>
+            <pre id="billing-note-text" class="code-block"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Historical Shift Logs Feed -->
+    <section class="card history-section">
+      <h3>Shift Documentation History</h3>
+      <div id="logs-history" class="history-list"></div>
+    </section>
+
+  </main>
+
+  <!-- Subscription Modal -->
+  <div id="stripe-modal" class="modal-overlay hidden">
+    <div class="modal-card card">
+      <button id="close-modal" class="close-btn">&times;</button>
+      <h2>CareBridge AI Professional</h2>
+      <p class="subtitle">Unlimited Voice Notes, Billing Note Export, and Family Sharing</p>
+      <div class="price-tag">$19 <span>/ month</span></div>
+      <ul class="feature-list">
+        <li>✓ Unlimited 45s voice note processing</li>
+        <li>✓ Gemini 3.5 Flash Multimodal Ingestion</li>
+        <li>✓ Audit-ready Medicaid/Insurance notes</li>
+        <li>✓ One-click SMS family updates</li>
+      </ul>
+      <button id="checkout-btn" class="btn btn-primary full-width">Proceed to Stripe Checkout ($19)</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
