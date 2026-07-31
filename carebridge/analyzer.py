@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from google import genai
@@ -216,8 +217,13 @@ Caregiver Note:
         """Main Orchestration Workflow."""
         cleaned_transcript = self.transcribe_and_clean_audio(input_data)
         metrics = self.extract_clinical_metrics(cleaned_transcript)
-        family_summary = self.generate_family_summary(cleaned_transcript, metrics)
-        billing_note = self.generate_billing_note(cleaned_transcript, metrics)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_summary = executor.submit(self.generate_family_summary, cleaned_transcript, metrics)
+            future_billing = executor.submit(self.generate_billing_note, cleaned_transcript, metrics)
+
+            family_summary = future_summary.result()
+            billing_note = future_billing.result()
 
         return CareShiftReport(
             raw_transcript=str(input_data),
