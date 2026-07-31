@@ -227,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderHistory(logs) {
     logsHistory.innerHTML = '';
+    const fragment = document.createDocumentFragment();
     logs.forEach(item => {
       const div = document.createElement('div');
       div.className = 'history-item';
@@ -237,8 +238,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <span class="badge">Verified Shift Log</span>
       `;
-      logsHistory.appendChild(div);
+      fragment.appendChild(div);
     });
+    logsHistory.appendChild(fragment);
   }
 
   // Modal & Stripe Subscription Handlers
