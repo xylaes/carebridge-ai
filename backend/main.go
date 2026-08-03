@@ -78,14 +78,55 @@ func init() {
 	})
 }
 
-func enableCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+func enableCORS(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+		var allowedOrigins []string
+		if allowedOriginsEnv != "" {
+			parts := strings.Split(allowedOriginsEnv, ",")
+			for _, part := range parts {
+				trimmed := strings.TrimSpace(part)
+				if trimmed != "" {
+					allowedOrigins = append(allowedOrigins, trimmed)
+				}
+			}
+		} else {
+			// Secure default development origins
+			allowedOrigins = []string{
+				"http://localhost:3000",
+				"http://localhost:5000",
+				"http://localhost:5173",
+				"http://localhost:5500",
+				"http://localhost:8080",
+				"http://127.0.0.1:3000",
+				"http://127.0.0.1:5000",
+				"http://127.0.0.1:5173",
+				"http://127.0.0.1:5500",
+				"http://127.0.0.1:8080",
+			}
+		}
+
+		isAllowed := false
+		for _, allowed := range allowedOrigins {
+			if allowed == "*" || allowed == origin {
+				isAllowed = true
+				break
+			}
+		}
+
+		if isAllowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
+	}
+
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w)
+	enableCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -99,7 +140,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w)
+	enableCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -204,7 +245,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLogsHandler(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w)
+	enableCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -223,7 +264,7 @@ func getLogsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkoutHandler(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w)
+	enableCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return

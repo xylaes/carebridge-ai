@@ -54,5 +54,65 @@ class TestCareBridgeAnalyzer(unittest.TestCase):
         self.assertTrue(len(report.family_summary) > 0)
         self.assertTrue(len(report.billing_note) > 0)
 
+    def test_heuristic_extract_vitals(self):
+        vitals = self.analyzer._heuristic_extract_vitals(self.sample_voice_note)
+        self.assertEqual(vitals.get("blood_pressure"), "120/80")
+        self.assertEqual(vitals.get("pulse"), 72)
+
+        # Test empty input
+        self.assertEqual(self.analyzer._heuristic_extract_vitals(""), {})
+
+    def test_heuristic_extract_medications(self):
+        meds = self.analyzer._heuristic_extract_medications(self.sample_voice_note)
+        self.assertEqual(len(meds), 1)
+        self.assertEqual(meds[0]["name"], "Lisinopril")
+        self.assertEqual(meds[0]["dosage"], "5mg")
+        self.assertEqual(meds[0]["status"], "Administered")
+
+        # Test fallback
+        fallback_meds = self.analyzer._heuristic_extract_medications("")
+        self.assertEqual(len(fallback_meds), 1)
+        self.assertIn("note", fallback_meds[0])
+
+    def test_heuristic_extract_mobility(self):
+        # Walker
+        mobility = self.analyzer._heuristic_extract_mobility("Using walker today")
+        self.assertIn("walker", mobility)
+
+        # Wheelchair
+        mobility = self.analyzer._heuristic_extract_mobility("assisted into wheelchair")
+        self.assertIn("Wheelchair", mobility)
+
+        # Walk/gait
+        mobility = self.analyzer._heuristic_extract_mobility("went for a walk")
+        self.assertIn("Ambulatory", mobility)
+
+        # Unspecified
+        mobility = self.analyzer._heuristic_extract_mobility("")
+        self.assertEqual(mobility, "Unspecified mobility")
+
+    def test_heuristic_extract_nutrition(self):
+        # Oatmeal
+        nutrition = self.analyzer._heuristic_extract_nutrition("had oatmeal for breakfast")
+        self.assertIn("oatmeal", nutrition)
+
+        # Breakfast/eat/%
+        nutrition = self.analyzer._heuristic_extract_nutrition("finished 70% of breakfast")
+        self.assertIn("breakfast", nutrition)
+
+        # Fallback
+        nutrition = self.analyzer._heuristic_extract_nutrition("")
+        self.assertEqual(nutrition, "Tolerated meal well.")
+
+    def test_heuristic_extract_alerts(self):
+        # With alert keyword
+        alerts = self.analyzer._heuristic_extract_alerts("reported pain in hip")
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("stiffness", alerts[0])
+
+        # No alerts
+        alerts = self.analyzer._heuristic_extract_alerts("feeling fine")
+        self.assertEqual(len(alerts), 0)
+
 if __name__ == "__main__":
     unittest.main()

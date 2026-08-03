@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from google import genai
@@ -118,7 +119,7 @@ Caregiver Note:
             print(f"[CareBridgeAnalyzer] Gemini extraction error: {e}")
             return self._heuristic_extract_clinical_metrics(text)
 
-    def _heuristic_extract_clinical_metrics(self, text: str) -> ClinicalMetrics:
+    def _heuristic_extract_vitals(self, text: str) -> Dict[str, Any]:
         vitals = {}
         
         # BP pattern
@@ -131,6 +132,9 @@ Caregiver Note:
         if pulse_match:
             vitals["pulse"] = int(pulse_match.group(1))
 
+        return vitals
+
+    def _heuristic_extract_medications(self, text: str) -> List[Dict[str, str]]:
         # Meds pattern
         medications = []
         med_match = re.search(r'(\d+mg|\d+\s*mg)\s+([A-Za-z]+)', text, re.IGNORECASE)
@@ -143,6 +147,9 @@ Caregiver Note:
         else:
             medications.append({"note": "Medications checked/administered as ordered"})
 
+        return medications
+
+    def _heuristic_extract_mobility(self, text: str) -> str:
         # Mobility
         mobility = "Unspecified mobility"
         if "walker" in text.lower():
@@ -152,6 +159,9 @@ Caregiver Note:
         elif "walk" in text.lower() or "gait" in text.lower():
             mobility = "Ambulatory exercise completed."
 
+        return mobility
+
+    def _heuristic_extract_nutrition(self, text: str) -> str:
         # Nutrition
         nutrition = "Tolerated meal well."
         if "oatmeal" in text.lower():
@@ -159,10 +169,22 @@ Caregiver Note:
         elif "breakfast" in text.lower() or "eat" in text.lower() or "%" in text:
             nutrition = "Tolerated breakfast meal well (approx. 80% intake)."
 
+        return nutrition
+
+    def _heuristic_extract_alerts(self, text: str) -> List[str]:
         # Alerts
         alerts = []
         if "stiffness" in text.lower() or "pain" in text.lower():
             alerts.append("Reported joint stiffness / discomfort during shift.")
+
+        return alerts
+
+    def _heuristic_extract_clinical_metrics(self, text: str) -> ClinicalMetrics:
+        vitals = self._heuristic_extract_vitals(text)
+        medications = self._heuristic_extract_medications(text)
+        mobility = self._heuristic_extract_mobility(text)
+        nutrition = self._heuristic_extract_nutrition(text)
+        alerts = self._heuristic_extract_alerts(text)
 
         return ClinicalMetrics(
             vitals=vitals,
@@ -216,8 +238,13 @@ Caregiver Note:
         """Main Orchestration Workflow."""
         cleaned_transcript = self.transcribe_and_clean_audio(input_data)
         metrics = self.extract_clinical_metrics(cleaned_transcript)
-        family_summary = self.generate_family_summary(cleaned_transcript, metrics)
-        billing_note = self.generate_billing_note(cleaned_transcript, metrics)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_summary = executor.submit(self.generate_family_summary, cleaned_transcript, metrics)
+            future_billing = executor.submit(self.generate_billing_note, cleaned_transcript, metrics)
+
+            family_summary = future_summary.result()
+            billing_note = future_billing.result()
 
         return CareShiftReport(
             raw_transcript=str(input_data),
