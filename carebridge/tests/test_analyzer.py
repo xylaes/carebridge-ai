@@ -2,11 +2,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 # Import will be tested once analyzer module is defined
-from carebridge.analyzer import (
-    CareBridgeAnalyzer,
-    ClinicalMetrics,
-    CareShiftReport
-)
+from carebridge.analyzer import CareBridgeAnalyzer, ClinicalMetrics, CareShiftReport
+
 
 class TestCareBridgeAnalyzer(unittest.TestCase):
 
@@ -93,11 +90,15 @@ class TestCareBridgeAnalyzer(unittest.TestCase):
 
     def test_heuristic_extract_nutrition(self):
         # Oatmeal
-        nutrition = self.analyzer._heuristic_extract_nutrition("had oatmeal for breakfast")
+        nutrition = self.analyzer._heuristic_extract_nutrition(
+            "had oatmeal for breakfast"
+        )
         self.assertIn("oatmeal", nutrition)
 
         # Breakfast/eat/%
-        nutrition = self.analyzer._heuristic_extract_nutrition("finished 70% of breakfast")
+        nutrition = self.analyzer._heuristic_extract_nutrition(
+            "finished 70% of breakfast"
+        )
         self.assertIn("breakfast", nutrition)
 
         # Fallback
@@ -113,6 +114,34 @@ class TestCareBridgeAnalyzer(unittest.TestCase):
         # No alerts
         alerts = self.analyzer._heuristic_extract_alerts("feeling fine")
         self.assertEqual(len(alerts), 0)
+
+    def test_heuristic_family_summary(self):
+        # Test with named person
+        summary = self.analyzer._heuristic_family_summary("Shift report for Mrs. Smith")
+        self.assertIn("Smith", summary)
+
+        # Test without named person
+        summary_no_name = self.analyzer._heuristic_family_summary(
+            "Shift report with no name"
+        )
+        self.assertIn("your loved one", summary_no_name)
+
+    def test_generate_family_summary_fallback(self):
+        # Setup analyzer to not use mock, but mock the client so generate_content raises Exception
+        analyzer = CareBridgeAnalyzer(use_mock=False)
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("API Error")
+        analyzer.client = mock_client
+        analyzer.use_mock = False
+
+        metrics = ClinicalMetrics()
+        # Should fallback gracefully to _heuristic_family_summary
+        summary = analyzer.generate_family_summary(
+            "Shift report for Mrs. Eleanor", metrics
+        )
+        self.assertIn("Eleanor", summary)
+        mock_client.models.generate_content.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
