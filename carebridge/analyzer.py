@@ -9,9 +9,18 @@ from concurrent.futures import ThreadPoolExecutor
 try:
     from google import genai
     from google.genai import types
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
+
+# Pre-compiled regular expressions for improved performance
+RE_WHITESPACE = re.compile(r"\s+")
+RE_BLOOD_PRESSURE = re.compile(r"(\b1?\d{2}/\d{2,3}\b)")
+RE_PULSE = re.compile(r"pulse\s*(\d{2,3})", re.IGNORECASE)
+RE_MEDICATIONS = re.compile(r"(\d+mg|\d+\s*mg)\s+([A-Za-z]+)", re.IGNORECASE)
+RE_FAMILY_NAME = re.compile(r"Mrs?\.\s+([A-Z][a-z]+)")
+RE_BILLING_HOURS = re.compile(r"(\d+)\s*-?\s*hour", re.IGNORECASE)
 
 
 @dataclass
@@ -37,13 +46,13 @@ class CareShiftReport:
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
-        data['clinical_log'] = self.clinical_log.to_dict()
+        data["clinical_log"] = self.clinical_log.to_dict()
         return data
 
 
 class CareBridgeAnalyzer:
     """Core AI processing module for CareBridge AI.
-    
+
     Transforms voice notes and text into structured Clinical Care Shift Logs,
     Medicaid/Insurance billing notes, and warm family update summaries.
     """
@@ -57,7 +66,9 @@ class CareBridgeAnalyzer:
             try:
                 self.client = genai.Client(api_key=self.api_key)
             except Exception as e:
-                print(f"[CareBridgeAnalyzer] Initializing Gemini Client failed: {e}. Falling back to mock engine.")
+                print(
+                    f"[CareBridgeAnalyzer] Initializing Gemini Client failed: {e}. Falling back to mock engine."
+                )
                 self.use_mock = True
         else:
             self.use_mock = True
@@ -70,13 +81,13 @@ class CareBridgeAnalyzer:
             text = input_data.strip()
 
         if self.use_mock or not self.client:
-            cleaned = re.sub(r'\s+', ' ', text)
+            cleaned = RE_WHITESPACE.sub(" ", text)
             return cleaned
 
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=f"Clean and format the following caregiver shift voice note transcript into clear professional prose. Preserve all numbers and facts:\n\n{text}"
+                model="gemini-2.5-flash",
+                contents=f"Clean and format the following caregiver shift voice note transcript into clear professional prose. Preserve all numbers and facts:\n\n{text}",
             )
             return response.text.strip()
         except Exception as e:
@@ -101,11 +112,11 @@ Caregiver Note:
 """
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
-                )
+                ),
             )
             data = json.loads(response.text)
             return ClinicalMetrics(
@@ -113,7 +124,7 @@ Caregiver Note:
                 medications=data.get("medications", []),
                 mobility=data.get("mobility", "Unspecified"),
                 nutrition=data.get("nutrition", "Unspecified"),
-                alerts=data.get("alerts", [])
+                alerts=data.get("alerts", []),
             )
         except Exception as e:
             print(f"[CareBridgeAnalyzer] Gemini extraction error: {e}")
@@ -121,14 +132,14 @@ Caregiver Note:
 
     def _heuristic_extract_vitals(self, text: str) -> Dict[str, Any]:
         vitals = {}
-        
+
         # BP pattern
-        bp_match = re.search(r'(\b1?\d{2}/\d{2,3}\b)', text)
+        bp_match = RE_BLOOD_PRESSURE.search(text)
         if bp_match:
             vitals["blood_pressure"] = bp_match.group(1)
-        
+
         # Pulse pattern
-        pulse_match = re.search(r'pulse\s*(\d{2,3})', text, re.IGNORECASE)
+        pulse_match = RE_PULSE.search(text)
         if pulse_match:
             vitals["pulse"] = int(pulse_match.group(1))
 
@@ -137,13 +148,15 @@ Caregiver Note:
     def _heuristic_extract_medications(self, text: str) -> List[Dict[str, str]]:
         # Meds pattern
         medications = []
-        med_match = re.search(r'(\d+mg|\d+\s*mg)\s+([A-Za-z]+)', text, re.IGNORECASE)
+        med_match = RE_MEDICATIONS.search(text)
         if med_match:
-            medications.append({
-                "name": med_match.group(2),
-                "dosage": med_match.group(1),
-                "status": "Administered"
-            })
+            medications.append(
+                {
+                    "name": med_match.group(2),
+                    "dosage": med_match.group(1),
+                    "status": "Administered",
+                }
+            )
         else:
             medications.append({"note": "Medications checked/administered as ordered"})
 
@@ -191,13 +204,13 @@ Caregiver Note:
             medications=medications,
             mobility=mobility,
             nutrition=nutrition,
-            alerts=alerts
+            alerts=alerts,
         )
 
     def generate_family_summary(self, text: str, metrics: ClinicalMetrics) -> str:
         """Family Summary Agent: Generates a warm, empathetic update for family members."""
         if self.use_mock or not self.client:
-            name_match = re.search(r'Mrs?\.\s+([A-Z][a-z]+)', text)
+            name_match = RE_FAMILY_NAME.search(text)
             name = name_match.group(1) if name_match else "your loved one"
 
             return (
@@ -211,8 +224,7 @@ Caregiver Note:
         prompt = f"Convert this clinical shift note into a warm, comforting update for the client's family:\n\n{text}"
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
+                model="gemini-2.5-flash", contents=prompt
             )
             return response.text.strip()
         except Exception as e:
@@ -221,7 +233,7 @@ Caregiver Note:
 
     def generate_billing_note(self, text: str, metrics: ClinicalMetrics) -> str:
         """Generates Medicaid / Insurance audit-ready billing note."""
-        hours_match = re.search(r'(\d+)\s*-?\s*hour', text, re.IGNORECASE)
+        hours_match = RE_BILLING_HOURS.search(text)
         hours = hours_match.group(1) if hours_match else "4"
 
         return (
@@ -234,14 +246,20 @@ Caregiver Note:
             f"Status: Service completed according to care plan."
         )
 
-    def analyze_shift_note(self, input_data: str | bytes, is_audio: bool = False) -> CareShiftReport:
+    def analyze_shift_note(
+        self, input_data: str | bytes, is_audio: bool = False
+    ) -> CareShiftReport:
         """Main Orchestration Workflow."""
         cleaned_transcript = self.transcribe_and_clean_audio(input_data)
         metrics = self.extract_clinical_metrics(cleaned_transcript)
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            future_summary = executor.submit(self.generate_family_summary, cleaned_transcript, metrics)
-            future_billing = executor.submit(self.generate_billing_note, cleaned_transcript, metrics)
+            future_summary = executor.submit(
+                self.generate_family_summary, cleaned_transcript, metrics
+            )
+            future_billing = executor.submit(
+                self.generate_billing_note, cleaned_transcript, metrics
+            )
 
             family_summary = future_summary.result()
             billing_note = future_billing.result()
@@ -251,5 +269,5 @@ Caregiver Note:
             cleaned_transcript=cleaned_transcript,
             clinical_log=metrics,
             family_summary=family_summary,
-            billing_note=billing_note
+            billing_note=billing_note,
         )
