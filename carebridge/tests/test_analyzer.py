@@ -114,5 +114,92 @@ class TestCareBridgeAnalyzer(unittest.TestCase):
         alerts = self.analyzer._heuristic_extract_alerts("feeling fine")
         self.assertEqual(len(alerts), 0)
 
+    @patch('carebridge.analyzer.genai.Client')
+    def test_extract_clinical_metrics_non_mock_success(self, mock_client_class):
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        # Setup mock response with valid JSON
+        mock_response = MagicMock()
+        mock_response.text = (
+            '{"vitals": {"blood_pressure": "110/70", "pulse": 68}, '
+            '"medications": [{"name": "Aspirin", "dosage": "81mg", "time": "8 AM"}], '
+            '"mobility": "Assisted walks", "nutrition": "Ate 100%", '
+            '"alerts": ["Some alert"]}'
+        )
+        mock_client.models.generate_content.return_value = mock_response
+
+        # Initialize analyzer with non-mock setting
+        analyzer = CareBridgeAnalyzer(api_key="fake-key", use_mock=False)
+        self.assertFalse(analyzer.use_mock)
+        self.assertEqual(analyzer.client, mock_client)
+
+        # Call the method
+        metrics = analyzer.extract_clinical_metrics(self.sample_voice_note)
+
+        # Verify call arguments
+        mock_client.models.generate_content.assert_called_once()
+        args, kwargs = mock_client.models.generate_content.call_args
+        self.assertEqual(kwargs.get('model'), 'gemini-2.5-flash')
+        self.assertIn(self.sample_voice_note, kwargs.get('contents'))
+        self.assertEqual(kwargs.get('config').response_mime_type, "application/json")
+
+        # Verify parsed clinical metrics
+        self.assertIsInstance(metrics, ClinicalMetrics)
+        self.assertEqual(metrics.vitals, {"blood_pressure": "110/70", "pulse": 68})
+        self.assertEqual(metrics.medications, [{"name": "Aspirin", "dosage": "81mg", "time": "8 AM"}])
+        self.assertEqual(metrics.mobility, "Assisted walks")
+        self.assertEqual(metrics.nutrition, "Ate 100%")
+        self.assertEqual(metrics.alerts, ["Some alert"])
+
+    @patch('carebridge.analyzer.genai.Client')
+    def test_extract_clinical_metrics_non_mock_malformed_json_fallback(self, mock_client_class):
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        # Setup mock response with malformed/invalid JSON
+        mock_response = MagicMock()
+        mock_response.text = '{"vitals": {"blood_pressure": "110/70", ' # Unclosed JSON
+        mock_client.models.generate_content.return_value = mock_response
+
+        # Initialize analyzer
+        analyzer = CareBridgeAnalyzer(api_key="fake-key", use_mock=False)
+
+        # Call the method
+        metrics = analyzer.extract_clinical_metrics(self.sample_voice_note)
+
+        # Verify call was made
+        mock_client.models.generate_content.assert_called_once()
+
+        # Verify fallback to heuristic extraction occurred
+        self.assertIsInstance(metrics, ClinicalMetrics)
+        self.assertEqual(metrics.vitals.get("blood_pressure"), "120/80")
+        self.assertEqual(metrics.vitals.get("pulse"), 72)
+        self.assertTrue(len(metrics.medications) > 0)
+        self.assertIn("walker", metrics.mobility.lower())
+        self.assertIn("oatmeal", metrics.nutrition.lower())
+
+    @patch('carebridge.analyzer.genai.Client')
+    def test_extract_clinical_metrics_non_mock_api_error_fallback(self, mock_client_class):
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        # Setup mock response to raise an exception
+        mock_client.models.generate_content.side_effect = Exception("Google GenAI API connection failed")
+
+        # Initialize analyzer
+        analyzer = CareBridgeAnalyzer(api_key="fake-key", use_mock=False)
+
+        # Call the method
+        metrics = analyzer.extract_clinical_metrics(self.sample_voice_note)
+
+        # Verify fallback to heuristic extraction occurred
+        self.assertIsInstance(metrics, ClinicalMetrics)
+        self.assertEqual(metrics.vitals.get("blood_pressure"), "120/80")
+        self.assertEqual(metrics.vitals.get("pulse"), 72)
+
 if __name__ == "__main__":
     unittest.main()
