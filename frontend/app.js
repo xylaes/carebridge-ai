@@ -161,11 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     medsList.innerHTML = '';
     const meds = log.medications || [{ name: 'Prescribed Lisinopril', dosage: '5mg', status: 'Administered' }];
+    const fragment = document.createDocumentFragment();
     meds.forEach(med => {
       const li = document.createElement('li');
       li.textContent = `💊 ${med.name || 'Medication'} - ${med.dosage || '5mg'} (${med.status || 'Verified'})`;
-      medsList.appendChild(li);
+      fragment.appendChild(li);
     });
+    medsList.appendChild(fragment);
 
     mobilityVal.textContent = log.mobility || 'Assisted walker gait exercise performed in garden.';
     nutritionVal.textContent = log.nutrition || 'Tolerated oatmeal breakfast well (approx. 80% intake).';
