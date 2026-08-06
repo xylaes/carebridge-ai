@@ -58,6 +58,27 @@ const mockDocument = {
 };
 
 /**
+ * Creates a history item DOM element.
+ * @param {Object} doc The document object (mock or real) to use.
+ * @param {Object} item The log item data.
+ * @return {MockElement} The created history item element.
+ */
+function createHistoryItemElement(doc, item) {
+  const div = doc.createElement('div');
+  div.className = 'history-item';
+  div.innerHTML = `
+    <div>
+      <strong>${item.caregiver || 'Caregiver'}</strong>
+      <p style="font-size: 12px; color: var(--text-muted);">${new Date(
+        item.processed_at || Date.now()
+      ).toLocaleTimeString()} - Shift Log</p>
+    </div>
+    <span class="badge">Verified Shift Log</span>
+  `;
+  return div;
+}
+
+/**
  * Original renderHistory implementation.
  * @param {MockElement} logsHistory
  * @param {Array<Object>} logs
@@ -65,17 +86,7 @@ const mockDocument = {
 function renderHistoryOriginal(logsHistory, logs) {
   logsHistory.innerHTML = '';
   logs.forEach(item => {
-    const div = mockDocument.createElement('div');
-    div.className = 'history-item';
-    div.innerHTML = `
-      <div>
-        <strong>${item.caregiver || 'Caregiver'}</strong>
-        <p style="font-size: 12px; color: var(--text-muted);">${new Date(
-          item.processed_at || Date.now()
-        ).toLocaleTimeString()} - Shift Log</p>
-      </div>
-      <span class="badge">Verified Shift Log</span>
-    `;
+    const div = createHistoryItemElement(mockDocument, item);
     logsHistory.appendChild(div);
   });
 }
@@ -89,17 +100,7 @@ function renderHistoryOptimized(logsHistory, logs) {
   logsHistory.innerHTML = '';
   const fragment = mockDocument.createDocumentFragment();
   logs.forEach(item => {
-    const div = mockDocument.createElement('div');
-    div.className = 'history-item';
-    div.innerHTML = `
-      <div>
-        <strong>${item.caregiver || 'Caregiver'}</strong>
-        <p style="font-size: 12px; color: var(--text-muted);">${new Date(
-          item.processed_at || Date.now()
-        ).toLocaleTimeString()} - Shift Log</p>
-      </div>
-      <span class="badge">Verified Shift Log</span>
-    `;
+    const div = createHistoryItemElement(mockDocument, item);
     fragment.appendChild(div);
   });
   logsHistory.appendChild(fragment);
